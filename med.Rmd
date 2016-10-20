@@ -1,0 +1,86 @@
+---
+title: "Medicare and Medicaid Expenditure"
+author: "Alex Perrone"
+date: "May 2, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r lib, include=FALSE}
+library(data.table)
+library(lubridate)
+library(magrittr)
+library(ggplot2)
+```
+
+## Read in data
+
+Inflation data obtained [here](http://usinflation.org/us-inflation-rate/). 
+
+The total healthcare spending was obtained by manual look-up for 2005 to 2015 by 
+loading the PDFs online which are numbered by year. For example, here is the 
+page for 2005:
+
+[https://www.fiscal.treasury.gov/fsreports/rpt/mthTreasStmt/mts0905.pdf](https://www.fiscal.treasury.gov/fsreports/rpt/mthTreasStmt/mts0905.pdf)
+
+and here is the page for 2015 (it differs only in final two digits): 
+
+[https://www.fiscal.treasury.gov/fsreports/rpt/mthTreasStmt/mts0915.pdf](https://www.fiscal.treasury.gov/fsreports/rpt/mthTreasStmt/mts0915.pdf)
+
+```{r read}
+dat <- fread("med-data.csv")
+print(dat)
+```
+
+## Clean
+
+```{r clean}
+dat$year <- paste0(dat$year, "-01-01") %>% ymd()
+```
+
+## Some analysis 
+
+Based on [this formula](https://en.wikipedia.org/wiki/Rule_of_72), 
+doubling over 10 years is $\exp{\left(\frac{\log{2}}{10}\right)} - 1$, 
+which evaluates to `r exp(log(2)/10) - 1` interest rate. 
+
+The sum of inflation from 2005 to 2015. I'm not sure we should actually include
+the year 2005 though. 
+
+```{r analysis}
+sum(dat$avg_inflation)  # with 2005 included
+sum(dat$avg_inflation[1:length(dat$avg_inflation)-1])  # with 2005 excluded
+dat[ , mean(avg_inflation)]  # average rate of inflation
+```
+
+
+## Plot 
+
+```{r plot}
+ggplot(dat, aes(year, avg_inflation)) + 
+  geom_point() + 
+  geom_line() + 
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
+  labs(title="Average Inflation from 2005-2015")
+ggplot(dat, aes(year, total_medicare_medicaid_billions)) + 
+  geom_point() + 
+  geom_line() + 
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
+  labs(title="Total Medicare and Medicaid Spending 2005-2015 (Billions)")
+```
+
+## Compute rates of increase for total medicare and medicaid spending
+
+```{r}
+dat <- dat[order(year)]
+cum_rate <- function(vec){
+  c(0, diff(vec)) / c(vec[1], vec[1], vec[2:(length(vec) - 1)])
+}
+dat[ , total_med_rate := cum_rate(total_medicare_medicaid_billions)]
+dat[ , mean(total_med_rate[2:nrow(dat)])]  # exclude first year, no rate there
+```
+
+
